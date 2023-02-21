@@ -330,7 +330,7 @@ class PoseVizMayaviSide:
                 viewinfos, viz_camera, viz_imshape = received_info
                 self.update_visu(viewinfos)
                 self.update_view_camera(viz_camera, viz_imshape)
-                self.capture_frame()
+                #self.capture_frame() #FIXME this scales with resolution and creates significant lag at fullscreen
                 self.q_posedata.task_done()
                 if self.step_one_by_one:
                     self.step_one_by_one = False

@@ -2,6 +2,7 @@ import contextlib
 import itertools
 import pickle
 import queue
+import time
 from typing import List
 
 import collections
@@ -12,6 +13,7 @@ import os
 import poseviz.improc
 import poseviz.colors
 import poseviz.video_writing
+import poseviz.config
 
 ViewInfo = collections.namedtuple(
     'ViewInfo', ['frame', 'boxes', 'poses', 'camera', 'poses_true', 'poses_alt'],
@@ -264,6 +266,9 @@ class PoseVizMayaviSide:
         self.show_virtual_display = show_virtual_display
         self.main_cam_value = main_cam_value
         self.camera_view_padding = camera_view_padding
+        self.config = poseviz.config.Config()
+        self.start_time = time.time()
+        self.view_resumed = False
 
     def run_loop(self):
         if self.use_virtual_display:
@@ -304,6 +309,14 @@ class PoseVizMayaviSide:
         from mayavi import mlab
 
         while True:
+
+            #FIXME this is a hack to get the view to resume at startup and should happen in the init function
+            if not(self.view_resumed):
+                if time.time() - self.start_time > 5:
+                    # FIXME this is another hack to make sure the view is initialized before resuming
+                    self.resume_view()
+                    self.view_resumed = True
+
             try:
                 received_info = self.q_posedata.get_nowait() if not self.paused else 'nothing'
             except queue.Empty:
@@ -426,6 +439,19 @@ class PoseVizMayaviSide:
             #     out_frame[:illust.shape[0], :illust.shape[1]] = illust
             self.q_out_video_frames.put(out_frame)
 
+    def save_view(self):
+            # saves the current view
+            import poseviz.mayavi_util
+            self.saved_view = poseviz.mayavi_util.get_current_view_as_camera()
+            self.config.set('saved_view', self.saved_view)
+
+    def resume_view(self):
+            # resumes a saved view
+            self.saved_view = self.config.get('saved_view')
+            if self.saved_view is not None:
+                import poseviz.mayavi_util
+                poseviz.mayavi_util.set_view_to_camera(self.saved_view)
+
     def _on_keypress(self, obj, ev):
         key = obj.GetKeySym()
         if key == 'x':
@@ -473,6 +499,13 @@ class PoseVizMayaviSide:
         elif key == 'u':
             # Show just the main cam pred
             self.pose_displayed_cam_id = self.main_cam
+        elif key == 'v':
+            # saves the current view into config
+            self.save_view()
+        elif key == '0':
+            # resumes a saved view from config
+            self.resume_view()
+
         else:
             try:
                 self.main_cam = max(0, min(int(key) - 1, self.n_views - 1))
